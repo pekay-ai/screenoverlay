@@ -46,6 +46,8 @@ That's it! No additional setup required.
 
 ## 🚀 Quick Start
 
+### Simple Duration-Based Overlay
+
 ```python
 from screenoverlay import Overlay
 
@@ -63,6 +65,29 @@ Overlay(mode='custom', color_tint=(255, 100, 100), opacity=0.7).activate()
 ```
 
 Press `ESC` to dismiss the overlay early.
+
+### Manual Start/Stop Control
+
+For apps that need to control overlay lifetime (like ScreenStop):
+
+```python
+from screenoverlay import Overlay
+from multiprocessing import Process
+
+def run_overlay():
+    overlay = Overlay(mode='blur', blur_strength=4)
+    overlay.start()  # Runs indefinitely
+
+# Start overlay in separate process
+overlay_process = Process(target=run_overlay)
+overlay_process.start()
+
+# Later, stop it
+overlay_process.terminate()
+overlay_process.join()
+```
+
+**See [`examples/`](examples/) folder for more use cases!**
 
 ---
 
@@ -161,6 +186,8 @@ Overlay(
 
 ### `activate()` Method
 
+Show overlay for a fixed duration.
+
 ```python
 overlay.activate(duration=5)
 ```
@@ -172,6 +199,33 @@ overlay.activate(duration=5)
 | `duration` | float | `5` | How long to show overlay (seconds) |
 
 **Note:** Press `ESC` to dismiss early.
+
+### `start()` Method
+
+Start overlay indefinitely (runs until stopped).
+
+```python
+overlay.start()
+```
+
+**Important:** This is blocking and runs `mainloop()`. For app integration, run in a separate process:
+
+```python
+from multiprocessing import Process
+p = Process(target=overlay.start)
+p.start()
+# Later: p.terminate()
+```
+
+### `stop()` Method
+
+Stop and close the overlay.
+
+```python
+overlay.stop()
+```
+
+**Note:** Usually called from within the overlay process, or use `process.terminate()` from parent.
 
 ---
 
@@ -313,18 +367,20 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -e .
 
 # Run examples
-python example_usage.py
+python examples/basic_duration.py
+python examples/start_stop_control.py
 ```
 
-### Running Tests
+### Examples
 
-```bash
-# Install dev dependencies
-pip install -e ".[dev]"
+Check out the [`examples/`](examples/) directory for complete working examples:
 
-# Run tests
-pytest
-```
+- **`basic_duration.py`** - Simple blur overlay with fixed duration
+- **`black_screen.py`** - Privacy blackout screen
+- **`start_stop_control.py`** - Manual control with multiprocessing
+- **`custom_color.py`** - Custom colored overlay
+
+Each example is fully documented and ready to run!
 
 ---
 

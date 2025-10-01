@@ -50,9 +50,41 @@ class NativeBlurOverlay:
             self.apply_blur = True
         
         self.root = None
+        self._timer_id = None
         
-    def activate(self, duration=5):
-        """Show native blur overlay and exit after duration"""
+    def start(self):
+        """
+        Start the overlay indefinitely (non-blocking, runs until stop() is called)
+        
+        For ScreenStop integration, run this in a separate process:
+            from multiprocessing import Process
+            p = Process(target=overlay.start)
+            p.start()
+            # Later: p.terminate()
+        """
+        self._create_window()
+        self.root.mainloop()
+    
+    def stop(self):
+        """Stop and close the overlay"""
+        if self._timer_id is not None:
+            try:
+                self.root.after_cancel(self._timer_id)
+                self._timer_id = None
+            except:
+                pass
+        if self.root is not None:
+            try:
+                self.root.quit()
+                self.root.destroy()
+            except:
+                pass
+            self.root = None
+        # Exit the process cleanly
+        os._exit(0)
+    
+    def _create_window(self):
+        """Internal method to create and configure the Tkinter window"""
         self.root = tk.Tk()
         
         # Remove window decorations
@@ -78,9 +110,13 @@ class NativeBlurOverlay:
         # Bind escape key to exit
         self.root.bind('<Escape>', lambda e: self.kill_completely())
         self.root.focus_set()
+    
+    def activate(self, duration=5):
+        """Show native blur overlay and exit after duration"""
+        self._create_window()
         
         # Auto-exit timer
-        self.root.after(int(duration * 1000), self.kill_completely)
+        self._timer_id = self.root.after(int(duration * 1000), self.kill_completely)
         
         # Show window
         self.root.mainloop()
