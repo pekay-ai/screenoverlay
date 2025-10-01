@@ -11,6 +11,8 @@ import os
 import threading
 from multiprocessing import Process, Queue
 import time
+import atexit
+import signal
 
 
 class NativeBlurOverlay:
@@ -57,6 +59,34 @@ class NativeBlurOverlay:
         self._process = None
         self._command_queue = None
         
+        # Register cleanup on exit to prevent orphaned processes
+        atexit.register(self._cleanup_on_exit)
+        
+    def _cleanup_on_exit(self):
+        """Cleanup overlay process on program exit"""
+        if self._process is not None and self._process.is_alive():
+            try:
+                # Try graceful stop first
+                if self._command_queue is not None:
+                    try:
+                        self._command_queue.put('stop')
+                    except:
+                        pass
+                
+                # Wait briefly
+                self._process.join(timeout=0.5)
+                
+                # Force kill if still alive
+                if self._process.is_alive():
+                    self._process.terminate()
+                    self._process.join(timeout=0.5)
+                    
+                # Last resort - force kill
+                if self._process.is_alive():
+                    self._process.kill()
+            except:
+                pass
+        
     def start(self):
         """
         Start the overlay process with show/hide control.
@@ -79,7 +109,7 @@ class NativeBlurOverlay:
             return
         
         self._command_queue = Queue()
-        self._process = Process(target=self._run_process, args=(self._command_queue,))
+        self._process = Process(target=self._run_process, args=(self._command_queue,), daemon=True)
         self._process.start()
         
         # Wait a bit for process to initialize
