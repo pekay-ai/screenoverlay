@@ -8,6 +8,9 @@ import tkinter as tk
 import platform
 import sys
 import os
+import threading
+from multiprocessing import Process, Queue
+import time
 
 
 class NativeBlurOverlay:
@@ -51,37 +54,96 @@ class NativeBlurOverlay:
         
         self.root = None
         self._timer_id = None
+        self._process = None
+        self._command_queue = None
         
     def start(self):
         """
-        Start the overlay indefinitely (non-blocking, runs until stop() is called)
+        Start the overlay process with show/hide control.
+        Call this once at app startup.
         
-        For ScreenStop integration, run this in a separate process:
-            from multiprocessing import Process
-            p = Process(target=overlay.start)
-            p.start()
-            # Later: p.terminate()
+        After calling start(), use show() and hide() to control visibility instantly.
+        
+        Example for ScreenStop:
+            overlay = Overlay(mode='blur', blur_strength=4)
+            overlay.start()  # Initialize (call once)
+            
+            overlay.show()   # Show overlay (instant)
+            time.sleep(2)
+            overlay.hide()   # Hide overlay (instant)
+            overlay.show()   # Show again
+            
+            overlay.stop()   # Cleanup when done
         """
-        self._create_window()
-        self.root.mainloop()
+        if self._process is not None:
+            return
+        
+        self._command_queue = Queue()
+        self._process = Process(target=self._run_process, args=(self._command_queue,))
+        self._process.start()
+        
+        # Wait a bit for process to initialize
+        time.sleep(0.3)
+    
+    def show(self):
+        """Show the overlay (instant, ~1ms)"""
+        if self._command_queue is not None:
+            self._command_queue.put('show')
+    
+    def hide(self):
+        """Hide the overlay (instant, ~1ms)"""
+        if self._command_queue is not None:
+            self._command_queue.put('hide')
     
     def stop(self):
-        """Stop and close the overlay"""
-        if self._timer_id is not None:
-            try:
-                self.root.after_cancel(self._timer_id)
-                self._timer_id = None
-            except:
-                pass
-        if self.root is not None:
-            try:
-                self.root.quit()
-                self.root.destroy()
-            except:
-                pass
-            self.root = None
-        # Exit the process cleanly
-        os._exit(0)
+        """Stop and cleanup the overlay completely"""
+        if self._command_queue is not None:
+            self._command_queue.put('stop')
+        
+        if self._process is not None:
+            self._process.join(timeout=2.0)
+            if self._process.is_alive():
+                self._process.terminate()
+            self._process = None
+        
+        self._command_queue = None
+    
+    def _run_process(self, command_queue):
+        """Run overlay in separate process with command queue"""
+        try:
+            # Create window
+            self._create_window()
+            self.root.withdraw()  # Start hidden
+            
+            # Process commands from queue
+            def check_commands():
+                try:
+                    while not command_queue.empty():
+                        cmd = command_queue.get_nowait()
+                        if cmd == 'show':
+                            self.root.deiconify()
+                            self.root.lift()
+                        elif cmd == 'hide':
+                            self.root.withdraw()
+                        elif cmd == 'stop':
+                            self.root.quit()
+                            return
+                except:
+                    pass
+                
+                # Check again in 10ms
+                self.root.after(10, check_commands)
+            
+            # Start command checker
+            check_commands()
+            
+            # Run mainloop
+            self.root.mainloop()
+            
+        except Exception as e:
+            print(f"Overlay process error: {e}")
+        finally:
+            os._exit(0)
     
     def _create_window(self):
         """Internal method to create and configure the Tkinter window"""
@@ -254,7 +316,7 @@ class NativeBlurOverlay:
             print(f"Linux blur effect hint failed: {e}")
     
     def kill_completely(self):
-        """Exit the overlay completely"""
+        """Exit the overlay completely (for activate() backward compatibility)"""
         try:
             if self.root:
                 self.root.quit()
@@ -262,7 +324,9 @@ class NativeBlurOverlay:
         except:
             pass
         
-        os._exit(0)
+        # Only call os._exit if we're in activate() mode (has timer)
+        if self._timer_id is not None:
+            os._exit(0)
 
 
 if __name__ == "__main__":

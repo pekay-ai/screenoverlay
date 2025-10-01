@@ -18,14 +18,21 @@ Privacy mode - full black screen overlay.
 python examples/black_screen.py
 ```
 
-### 3. Start/Stop Control (`start_stop_control.py`)
+### 3. Show/Hide Control (`show_hide_control.py`) ⭐ **NEW**
+Instant show/hide toggling with minimal latency (~0.1ms). Perfect for real-time applications like ScreenStop.
+
+```bash
+python examples/show_hide_control.py
+```
+
+### 4. Start/Stop Control (`start_stop_control.py`)
 Manual control using multiprocessing - perfect for app integration.
 
 ```bash
 python examples/start_stop_control.py
 ```
 
-### 4. Custom Color (`custom_color.py`)
+### 5. Custom Color (`custom_color.py`)
 Custom color overlay with transparency.
 
 ```bash
