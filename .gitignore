@@ -43,3 +43,6 @@ htmlcov/
 # Distribution
 *.whl
 
+# Project documentation (internal)
+PROJECT.md
+
