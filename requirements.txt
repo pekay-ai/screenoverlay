@@ -1,0 +1,2 @@
+# Native blur overlay - minimal dependencies
+pyobjc-framework-Cocoa; platform_system=="Darwin"
