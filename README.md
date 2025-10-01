@@ -369,7 +369,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - 🐛 **Issues:** [GitHub Issues](https://github.com/pekay/screenoverlay/issues)
 - 💬 **Discussions:** [GitHub Discussions](https://github.com/pekay/screenoverlay/discussions)
-- 📧 **Email:** contact@pekay.ai
+- 📧 **Email:** ppnicky@gmail.com
 - 🏢 **Enterprise Solutions:** Contact us about **[ScreenStop](https://github.com/pekay/screenstop)** for advanced protection
 
 ---
