@@ -5,13 +5,13 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="screenoverlay",
-    version="0.1.0",
+    version="0.1.1",
     author="Pekay",
     author_email="contact@pekay.ai",
     description="Cross-platform screen overlay with blur, black, white, and custom modes",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/pekay/screenoverlay",
+    url="https://github.com/pekay-ai/screenoverlay",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
