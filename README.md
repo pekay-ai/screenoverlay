@@ -27,6 +27,7 @@ We're releasing it as **open-source (MIT)** because we believe privacy tools sho
 
 - 🎭 **4 Overlay Modes** - blur, black, white, custom colors
 - ⚡ **Ultra Fast** - <50ms startup, native OS blur effects
+- 🖥️ **Multi-Monitor Support** - Automatically blurs ALL screens simultaneously
 - 🔒 **No Permissions** - No screen recording access required
 - 🌍 **Cross-Platform** - macOS, Windows, Linux
 - 🎯 **Simple API** - One line of code to activate
@@ -341,13 +342,15 @@ Overlay(
 
 - **Method:** Native OS window effects (no screen capture)
 - **Permissions:** None required (works without screen recording access)
-- **Memory:** Minimal footprint
+- **Memory:** Minimal footprint (~10 MB per screen)
 - **Process Model:** Separate process with queue-based messaging
+- **Multi-Monitor:** Automatically detects and covers all screens
 
 **Why so fast?** Unlike traditional screen capture approaches (400-1000ms), we use:
 1. Native OS-level window blur effects (no image processing)
 2. Persistent subprocess with `withdraw()`/`deiconify()` toggling
 3. Queue-based messaging for instant communication
+4. One window per monitor (all controlled simultaneously)
 
 This makes `show()` and `hide()` nearly **10,000x faster** than recreating the overlay each time!
 

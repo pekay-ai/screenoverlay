@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="screenoverlay",
-    version="0.3.1",
+    version="0.4.0",
     author="Pekay",
     author_email="ppnicky@gmail.com",
     description="Cross-platform screen overlay with blur, black, white, and custom modes",
@@ -34,6 +34,7 @@ setup(
     python_requires=">=3.7",
     install_requires=[
         'pyobjc-framework-Cocoa; platform_system=="Darwin"',
+        'screeninfo',
     ],
     extras_require={
         "dev": ["pytest", "twine", "wheel"],

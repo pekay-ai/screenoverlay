@@ -14,6 +14,13 @@ import time
 import atexit
 import signal
 
+# Try to import screeninfo for multi-monitor support
+try:
+    from screeninfo import get_monitors
+    HAS_SCREENINFO = True
+except ImportError:
+    HAS_SCREENINFO = False
+
 
 class NativeBlurOverlay:
     def __init__(self, mode='blur', blur_strength=3, opacity=0.85, color_tint=(136, 136, 136)):
@@ -55,6 +62,7 @@ class NativeBlurOverlay:
             self.apply_blur = True
         
         self.root = None
+        self.windows = []  # List to hold multiple windows for multi-monitor
         self._timer_id = None
         self._process = None
         self._command_queue = None
@@ -141,9 +149,12 @@ class NativeBlurOverlay:
     def _run_process(self, command_queue):
         """Run overlay in separate process with command queue"""
         try:
-            # Create window
-            self._create_window()
-            self.root.withdraw()  # Start hidden
+            # Create windows for all monitors
+            self._create_windows()
+            
+            # Hide all windows initially
+            for win in self.windows:
+                win.withdraw()
             
             # Process commands from queue
             def check_commands():
@@ -151,10 +162,12 @@ class NativeBlurOverlay:
                     while not command_queue.empty():
                         cmd = command_queue.get_nowait()
                         if cmd == 'show':
-                            self.root.deiconify()
-                            self.root.lift()
+                            for win in self.windows:
+                                win.deiconify()
+                                win.lift()
                         elif cmd == 'hide':
-                            self.root.withdraw()
+                            for win in self.windows:
+                                win.withdraw()
                         elif cmd == 'stop':
                             self.root.quit()
                             return
@@ -174,6 +187,67 @@ class NativeBlurOverlay:
             print(f"Overlay process error: {e}")
         finally:
             os._exit(0)
+    
+    def _get_monitors(self):
+        """Get information about all monitors"""
+        if HAS_SCREENINFO:
+            try:
+                monitors = get_monitors()
+                return [(m.x, m.y, m.width, m.height) for m in monitors]
+            except:
+                pass
+        
+        # Fallback: assume single primary monitor
+        root = tk.Tk()
+        root.withdraw()
+        width = root.winfo_screenwidth()
+        height = root.winfo_screenheight()
+        root.destroy()
+        return [(0, 0, width, height)]
+    
+    def _create_windows(self):
+        """Create overlay windows for all monitors"""
+        monitors = self._get_monitors()
+        
+        # Create primary root window
+        self.root = tk.Tk()
+        self.root.overrideredirect(True)
+        self.root.attributes('-topmost', True)
+        
+        # Configure primary window for first monitor
+        if monitors:
+            x, y, width, height = monitors[0]
+            self._configure_window(self.root, x, y, width, height)
+            self.windows.append(self.root)
+        
+        # Create additional windows for other monitors
+        for x, y, width, height in monitors[1:]:
+            win = tk.Toplevel(self.root)
+            win.overrideredirect(True)
+            win.attributes('-topmost', True)
+            self._configure_window(win, x, y, width, height)
+            self.windows.append(win)
+    
+    def _configure_window(self, window, x, y, width, height):
+        """Configure a window with overlay settings"""
+        # Set background color (tint)
+        bg_color = f'#{self.color_tint[0]:02x}{self.color_tint[1]:02x}{self.color_tint[2]:02x}'
+        window.configure(bg=bg_color)
+        
+        # Set opacity
+        window.attributes('-alpha', self.opacity)
+        
+        # Position and size
+        window.geometry(f"{width}x{height}+{x}+{y}")
+        
+        # Apply native blur effect based on OS (only if mode is 'blur')
+        if self.apply_blur:
+            self._apply_native_blur_to_window(window)
+        
+        # Bind escape key to exit (only on primary window)
+        if window == self.root:
+            window.bind('<Escape>', lambda e: self.kill_completely())
+            window.focus_set()
     
     def _create_window(self):
         """Internal method to create and configure the Tkinter window"""
@@ -214,25 +288,33 @@ class NativeBlurOverlay:
         self.root.mainloop()
         
     def _apply_native_blur(self):
-        """Apply OS-native backdrop blur effect"""
+        """Apply OS-native backdrop blur effect to root window (legacy method)"""
+        self._apply_native_blur_to_window(self.root)
+    
+    def _apply_native_blur_to_window(self, window):
+        """Apply OS-native backdrop blur effect to a specific window"""
         system = platform.system()
         
         if system == 'Darwin':  # macOS
-            self._apply_macos_blur()
+            self._apply_macos_blur_to_window(window)
         elif system == 'Windows':
-            self._apply_windows_blur()
+            self._apply_windows_blur_to_window(window)
         elif system == 'Linux':
-            self._apply_linux_blur()
+            self._apply_linux_blur_to_window(window)
             
     def _apply_macos_blur(self):
-        """Apply macOS NSVisualEffectView blur"""
+        """Apply macOS NSVisualEffectView blur (legacy method)"""
+        self._apply_macos_blur_to_window(self.root)
+    
+    def _apply_macos_blur_to_window(self, window):
+        """Apply macOS NSVisualEffectView blur to a specific window"""
         try:
             from Cocoa import NSView, NSVisualEffectView
             from Cocoa import NSVisualEffectBlendingModeBehindWindow, NSVisualEffectMaterialDark
             import objc
             
             # Get the Tk window's NSWindow
-            window_id = self.root.winfo_id()
+            window_id = window.winfo_id()
             
             # Create NSVisualEffectView
             # Note: This requires pyobjc-framework-Cocoa
@@ -270,7 +352,11 @@ class NativeBlurOverlay:
             print(f"macOS blur effect failed: {e}")
             
     def _apply_windows_blur(self):
-        """Apply Windows Acrylic/Blur effect"""
+        """Apply Windows Acrylic/Blur effect (legacy method)"""
+        self._apply_windows_blur_to_window(self.root)
+    
+    def _apply_windows_blur_to_window(self, window):
+        """Apply Windows Acrylic/Blur effect to a specific window"""
         try:
             import ctypes
             from ctypes import wintypes
@@ -278,10 +364,10 @@ class NativeBlurOverlay:
             # Get window handle - try multiple methods
             try:
                 # Method 1: Direct window ID
-                hwnd = self.root.winfo_id()
+                hwnd = window.winfo_id()
             except:
                 # Method 2: Get parent window
-                hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
+                hwnd = ctypes.windll.user32.GetParent(window.winfo_id())
             
             if not hwnd:
                 print("Could not get window handle for blur effect")
@@ -332,7 +418,11 @@ class NativeBlurOverlay:
             print("Overlay will work but without native blur effect")
             
     def _apply_linux_blur(self):
-        """Apply Linux compositor blur (X11/Wayland)"""
+        """Apply Linux compositor blur (X11/Wayland) (legacy method)"""
+        self._apply_linux_blur_to_window(self.root)
+    
+    def _apply_linux_blur_to_window(self, window):
+        """Apply Linux compositor blur (X11/Wayland) to a specific window"""
         try:
             # Linux blur depends on compositor (KWin, Mutter, etc.)
             # Most compositors respect window transparency and apply blur automatically
