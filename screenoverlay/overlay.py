@@ -23,7 +23,7 @@ except ImportError:
 
 
 class NativeBlurOverlay:
-    def __init__(self, mode='blur', blur_strength=3, opacity=0.85, color_tint=(136, 136, 136)):
+    def __init__(self, mode='blur', blur_strength=3, opacity=0.85, color_tint=(136, 136, 136), all_screens=True):
         """
         Initialize native overlay
         
@@ -36,9 +36,11 @@ class NativeBlurOverlay:
         - blur_strength (int): How blurred/obscured (1-5, only for mode='blur')
         - opacity (float): Window opacity (0.0 to 1.0)
         - color_tint (tuple): RGB color tint (0-255)
+        - all_screens (bool): If True, blur all monitors. If False, only blur primary monitor (default: True)
         """
         self.mode = mode.lower()
         self.blur_strength = max(1, min(5, blur_strength))
+        self.all_screens = all_screens
         
         # Apply mode-specific settings
         if self.mode == 'black':
@@ -163,16 +165,22 @@ class NativeBlurOverlay:
                         cmd = command_queue.get_nowait()
                         if cmd == 'show':
                             for win in self.windows:
-                                win.deiconify()
-                                win.lift()
+                                try:
+                                    win.deiconify()
+                                    win.lift()
+                                except Exception as e:
+                                    print(f"Warning: Failed to show window: {e}")
                         elif cmd == 'hide':
                             for win in self.windows:
-                                win.withdraw()
+                                try:
+                                    win.withdraw()
+                                except Exception as e:
+                                    print(f"Warning: Failed to hide window: {e}")
                         elif cmd == 'stop':
                             self.root.quit()
                             return
-                except:
-                    pass
+                except Exception as e:
+                    print(f"Warning: Command queue error: {e}")
                 
                 # Check again in 10ms
                 self.root.after(10, check_commands)
@@ -206,8 +214,12 @@ class NativeBlurOverlay:
         return [(0, 0, width, height)]
     
     def _create_windows(self):
-        """Create overlay windows for all monitors"""
+        """Create overlay windows for all monitors (or just primary if all_screens=False)"""
         monitors = self._get_monitors()
+        
+        # If all_screens is False, only use primary monitor
+        if not self.all_screens:
+            monitors = monitors[:1]  # Only keep first monitor
         
         # Create primary root window
         self.root = tk.Tk()
@@ -220,7 +232,7 @@ class NativeBlurOverlay:
             self._configure_window(self.root, x, y, width, height)
             self.windows.append(self.root)
         
-        # Create additional windows for other monitors
+        # Create additional windows for other monitors (only if all_screens=True)
         for x, y, width, height in monitors[1:]:
             win = tk.Toplevel(self.root)
             win.overrideredirect(True)
@@ -279,7 +291,7 @@ class NativeBlurOverlay:
     
     def activate(self, duration=5):
         """Show native blur overlay and exit after duration"""
-        self._create_window()
+        self._create_windows()  # Use multi-monitor aware method
         
         # Auto-exit timer
         self._timer_id = self.root.after(int(duration * 1000), self.kill_completely)

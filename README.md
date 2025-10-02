@@ -63,6 +63,10 @@ Overlay(mode='white').activate(duration=1)
 
 # Custom colored overlay
 Overlay(mode='custom', color_tint=(255, 100, 100), opacity=0.7).activate()
+
+# Multi-monitor control
+Overlay(mode='blur', all_screens=True).activate(duration=5)   # Blur all monitors (default)
+Overlay(mode='blur', all_screens=False).activate(duration=5)  # Blur only primary monitor
 ```
 
 Press `ESC` to dismiss the overlay early.
@@ -178,7 +182,8 @@ Overlay(
     mode='blur',              # 'blur', 'black', 'white', 'custom'
     blur_strength=3,          # 1-5 (only for mode='blur')
     opacity=0.85,             # 0.0-1.0
-    color_tint=(136, 136, 136)  # RGB tuple (0-255)
+    color_tint=(136, 136, 136),  # RGB tuple (0-255)
+    all_screens=True          # True = all monitors, False = primary only
 )
 ```
 
@@ -190,6 +195,7 @@ Overlay(
 | `blur_strength` | int | `3` | Blur intensity 1-5 (only for blur mode) |
 | `opacity` | float | `0.85` | Window opacity 0.0 (transparent) to 1.0 (opaque) |
 | `color_tint` | tuple | `(136, 136, 136)` | RGB color values (0-255) |
+| `all_screens` | bool | `True` | If `True`, blur all monitors. If `False`, blur only primary monitor |
 
 ### `activate()` Method
 
@@ -440,11 +446,63 @@ Contributions are welcome! Here's how you can help:
 
 ---
 
-## 📄 License
+## 📄 Licensing
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+ScreenOverlay uses a **dual-license model** similar to xlwings:
 
-**Why MIT?** We believe privacy tools should be freely accessible to everyone. Use it in your personal projects, integrate it into your commercial applications, or fork it to create something entirely new. No restrictions, no complications.
+### 🆓 Non-Commercial Use (Free)
+
+Free for individuals and non-commercial purposes:
+
+✅ Personal projects  
+✅ Educational use  
+✅ Academic research  
+✅ Open source projects (OSI-approved licenses)  
+✅ Non-profit organizations  
+✅ Evaluation and testing
+
+**No license key needed** - just `pip install screenoverlay` and start using it!
+
+### 💼 Commercial Use (License Required)
+
+A commercial license is required if you use ScreenOverlay:
+
+💼 At a company or for commercial purposes  
+🏢 In a commercial product or service  
+💰 For client work or revenue-generating activities  
+🔧 In any business context
+
+#### Pricing:
+
+| License Type | Price | Use Case |
+|--------------|-------|----------|
+| 👨‍💻 **Developer** | $149/year | Single developer |
+| 👥 **Team** | $699/year | Up to 5 developers |
+| 🏢 **Enterprise** | Custom | Unlimited developers + priority support |
+
+**All commercial licenses include:**
+
+✅ Commercial use rights  
+✅ Priority email support  
+✅ Perpetual license for purchased version  
+✅ 1 year of updates
+
+**[Purchase License](mailto:ppnicky@gmail.com?subject=ScreenOverlay%20Commercial%20License) | [Contact Sales](mailto:ppnicky@gmail.com?subject=ScreenOverlay%20Enterprise%20Inquiry)**
+
+### ❓ Which License Do I Need?
+
+**Simple rule:** If you're using it in a business/commercial context, you need a commercial license.
+
+| Scenario | License Needed |
+|----------|----------------|
+| Personal side project (no revenue) | 🆓 Non-Commercial |
+| Learning Python at home | 🆓 Non-Commercial |
+| University research project | 🆓 Non-Commercial |
+| Open source project (MIT, GPL, etc.) | 🆓 Non-Commercial |
+| Using at your company/job | 💼 Commercial |
+| Building a SaaS product | 💼 Commercial |
+| Freelance client work | 💼 Commercial |
+| Integrating into commercial software | 💼 Commercial |
 
 ---
 
