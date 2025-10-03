@@ -2,17 +2,14 @@
 """
 Native Blur Overlay - Uses OS-native blur effects
 No screen capture, no permissions needed, instant appearance
+
+Single-process architecture using Tkinter's update() for non-blocking operation.
 """
 
 import tkinter as tk
 import platform
 import sys
 import os
-import threading
-from multiprocessing import Process, Queue
-import time
-import atexit
-import signal
 
 # Try to import screeninfo for multi-monitor support
 try:
@@ -65,154 +62,102 @@ class NativeBlurOverlay:
         
         self.root = None
         self.windows = []  # List to hold multiple windows for multi-monitor
-        self._timer_id = None
-        self._process = None
-        self._command_queue = None
-        
-        # Register cleanup on exit to prevent orphaned processes
-        atexit.register(self._cleanup_on_exit)
-        
-    def _cleanup_on_exit(self):
-        """Cleanup overlay process on program exit"""
-        if self._process is not None and self._process.is_alive():
-            try:
-                # Try graceful stop first
-                if self._command_queue is not None:
-                    try:
-                        self._command_queue.put('stop')
-                    except:
-                        pass
-                
-                # Wait briefly
-                self._process.join(timeout=0.5)
-                
-                # Force kill if still alive
-                if self._process.is_alive():
-                    self._process.terminate()
-                    self._process.join(timeout=0.5)
-                    
-                # Last resort - force kill
-                if self._process.is_alive():
-                    self._process.kill()
-            except:
-                pass
+        self._is_visible = False
         
     def start(self):
         """
-        Start the overlay process with show/hide control.
+        Initialize the overlay windows.
         Call this once at app startup.
         
-        After calling start(), use show() and hide() to control visibility instantly.
+        After calling start(), use show() and hide() to control visibility instantly,
+        and call update() regularly in your main loop to keep the overlay responsive.
         
-        Example for ScreenStop:
+        Example:
             overlay = Overlay(mode='blur', blur_strength=4)
             overlay.start()  # Initialize (call once)
             
-            overlay.show()   # Show overlay (instant)
-            time.sleep(2)
-            overlay.hide()   # Hide overlay (instant)
-            overlay.show()   # Show again
+            while True:
+                overlay.show()      # Show overlay (instant)
+                time.sleep(2)
+                overlay.hide()      # Hide overlay (instant)
+                overlay.update()    # Keep overlay responsive (call regularly!)
             
             overlay.stop()   # Cleanup when done
         """
-        if self._process is not None:
-            return
+        if self.root is not None:
+            return  # Already started
         
-        self._command_queue = Queue()
-        self._process = Process(target=self._run_process, args=(self._command_queue,), daemon=True)
-        self._process.start()
+        # Create windows for all monitors
+        self._create_windows()
         
-        # Wait a bit for process to initialize
-        time.sleep(0.3)
+        # Hide all windows initially
+        for win in self.windows:
+            win.withdraw()
+        
+        self._is_visible = False
     
     def show(self):
-        """Show the overlay (instant, ~1ms)"""
-        if self._command_queue is not None:
-            self._command_queue.put('show')
+        """Show the overlay (instant, <1ms)"""
+        if self.root is None:
+            # Auto-start if not started yet
+            self.start()
+        
+        if not self._is_visible:
+            for win in self.windows:
+                try:
+                    win.deiconify()
+                    win.lift()
+                except Exception as e:
+                    print(f"Warning: Failed to show window: {e}")
+            self._is_visible = True
     
     def hide(self):
-        """
-        Hide the overlay and restart for next use (100% reliable, prevents ghost windows)
+        """Hide the overlay (instant, <1ms)"""
+        if self.root is None:
+            return  # Not started yet
         
-        This method:
-        1. Hides the overlay instantly (user sees clear screen ~1ms)
-        2. Stops the overlay process completely (kills any ghost windows)
-        3. Starts a fresh overlay ready for next show() (happens in background ~300ms)
-        
-        This "restart on hide" approach guarantees zero ghost windows by giving
-        each detection cycle a fresh overlay process, at the cost of ~300ms 
-        startup time that happens during safe periods (when screen is clear).
+        if self._is_visible:
+            for win in self.windows:
+                try:
+                    win.withdraw()
+                except Exception as e:
+                    print(f"Warning: Failed to hide window: {e}")
+            self._is_visible = False
+    
+    def update(self):
         """
-        if self._command_queue is not None:
-            # Hide first (instant for user)
-            self._command_queue.put('hide')
-            
-            # Stop the process completely to prevent ghost windows
-            self.stop()
-            
-            # Start fresh overlay for next show() (happens in background)
-            self.start()
+        Keep overlay responsive - call this regularly in your main loop!
+        
+        This processes Tkinter events and keeps the windows responsive.
+        Without calling this, the overlay will freeze.
+        
+        Example:
+            while True:
+                detect_something()
+                if detected:
+                    overlay.show()
+                else:
+                    overlay.hide()
+                overlay.update()  # ← Call this every loop iteration!
+                time.sleep(0.1)
+        """
+        if self.root is not None:
+            try:
+                self.root.update()
+            except Exception as e:
+                print(f"Warning: Update failed: {e}")
     
     def stop(self):
         """Stop and cleanup the overlay completely"""
-        if self._command_queue is not None:
-            self._command_queue.put('stop')
-        
-        if self._process is not None:
-            self._process.join(timeout=2.0)
-            if self._process.is_alive():
-                self._process.terminate()
-            self._process = None
-        
-        self._command_queue = None
-    
-    def _run_process(self, command_queue):
-        """Run overlay in separate process with command queue"""
-        try:
-            # Create windows for all monitors
-            self._create_windows()
-            
-            # Hide all windows initially
-            for win in self.windows:
-                win.withdraw()
-            
-            # Process commands from queue
-            def check_commands():
-                try:
-                    while not command_queue.empty():
-                        cmd = command_queue.get_nowait()
-                        if cmd == 'show':
-                            for win in self.windows:
-                                try:
-                                    win.deiconify()
-                                    win.lift()
-                                except Exception as e:
-                                    print(f"Warning: Failed to show window: {e}")
-                        elif cmd == 'hide':
-                            for win in self.windows:
-                                try:
-                                    win.withdraw()
-                                except Exception as e:
-                                    print(f"Warning: Failed to hide window: {e}")
-                        elif cmd == 'stop':
-                            self.root.quit()
-                            return
-                except Exception as e:
-                    print(f"Warning: Command queue error: {e}")
-                
-                # Check again in 10ms
-                self.root.after(10, check_commands)
-            
-            # Start command checker
-            check_commands()
-            
-            # Run mainloop
-            self.root.mainloop()
-            
-        except Exception as e:
-            print(f"Overlay process error: {e}")
-        finally:
-            os._exit(0)
+        if self.root is not None:
+            try:
+                self.root.quit()
+                self.root.destroy()
+            except:
+                pass
+            self.root = None
+            self.windows = []
+            self._is_visible = False
     
     def _get_monitors(self):
         """Get information about all monitors"""
@@ -274,52 +219,9 @@ class NativeBlurOverlay:
         if self.apply_blur:
             self._apply_native_blur_to_window(window)
         
-        # Bind escape key to exit (only on primary window)
+        # Bind escape key to hide (only on primary window)
         if window == self.root:
-            window.bind('<Escape>', lambda e: self.kill_completely())
-            window.focus_set()
-    
-    def _create_window(self):
-        """Internal method to create and configure the Tkinter window"""
-        self.root = tk.Tk()
-        
-        # Remove window decorations
-        self.root.overrideredirect(True)
-        self.root.attributes('-topmost', True)
-        
-        # Set background color (tint)
-        bg_color = f'#{self.color_tint[0]:02x}{self.color_tint[1]:02x}{self.color_tint[2]:02x}'
-        self.root.configure(bg=bg_color)
-        
-        # Set opacity
-        self.root.attributes('-alpha', self.opacity)
-        
-        # Full screen
-        screen_width = self.root.winfo_screenwidth()
-        screen_height = self.root.winfo_screenheight()
-        self.root.geometry(f"{screen_width}x{screen_height}+0+0")
-        
-        # Apply native blur effect based on OS (only if mode is 'blur')
-        if self.apply_blur:
-            self._apply_native_blur()
-        
-        # Bind escape key to exit
-        self.root.bind('<Escape>', lambda e: self.kill_completely())
-        self.root.focus_set()
-    
-    def activate(self, duration=5):
-        """Show native blur overlay and exit after duration"""
-        self._create_windows()  # Use multi-monitor aware method
-        
-        # Auto-exit timer
-        self._timer_id = self.root.after(int(duration * 1000), self.kill_completely)
-        
-        # Show window
-        self.root.mainloop()
-        
-    def _apply_native_blur(self):
-        """Apply OS-native backdrop blur effect to root window (legacy method)"""
-        self._apply_native_blur_to_window(self.root)
+            window.bind('<Escape>', lambda e: self.hide())
     
     def _apply_native_blur_to_window(self, window):
         """Apply OS-native backdrop blur effect to a specific window"""
@@ -331,10 +233,6 @@ class NativeBlurOverlay:
             self._apply_windows_blur_to_window(window)
         elif system == 'Linux':
             self._apply_linux_blur_to_window(window)
-            
-    def _apply_macos_blur(self):
-        """Apply macOS NSVisualEffectView blur (legacy method)"""
-        self._apply_macos_blur_to_window(self.root)
     
     def _apply_macos_blur_to_window(self, window):
         """Apply macOS NSVisualEffectView blur to a specific window"""
@@ -359,17 +257,17 @@ class NativeBlurOverlay:
                 from Cocoa import NSMakeRect
                 
                 # Get all windows and find ours
-                for window in NSApp.windows():
-                    if window.isVisible():
+                for ns_window in NSApp.windows():
+                    if ns_window.isVisible():
                         # Create visual effect view
-                        frame = window.contentView().frame()
+                        frame = ns_window.contentView().frame()
                         effect_view = NSVisualEffectView.alloc().initWithFrame_(frame)
                         effect_view.setBlendingMode_(NSVisualEffectBlendingModeBehindWindow)
                         effect_view.setMaterial_(NSVisualEffectMaterialDark)
                         effect_view.setState_(1)  # Active state
                         
                         # Add as subview
-                        window.contentView().addSubview_positioned_relativeTo_(
+                        ns_window.contentView().addSubview_positioned_relativeTo_(
                             effect_view, 0, None
                         )
                         break
@@ -380,10 +278,6 @@ class NativeBlurOverlay:
             print("pyobjc not available, install with: pip install pyobjc-framework-Cocoa")
         except Exception as e:
             print(f"macOS blur effect failed: {e}")
-            
-    def _apply_windows_blur(self):
-        """Apply Windows Acrylic/Blur effect (legacy method)"""
-        self._apply_windows_blur_to_window(self.root)
     
     def _apply_windows_blur_to_window(self, window):
         """Apply Windows Acrylic/Blur effect to a specific window"""
@@ -446,10 +340,6 @@ class NativeBlurOverlay:
             # Blur effect failed, but window will still work (just without blur)
             print(f"Note: Windows blur effect unavailable: {e}")
             print("Overlay will work but without native blur effect")
-            
-    def _apply_linux_blur(self):
-        """Apply Linux compositor blur (X11/Wayland) (legacy method)"""
-        self._apply_linux_blur_to_window(self.root)
     
     def _apply_linux_blur_to_window(self, window):
         """Apply Linux compositor blur (X11/Wayland) to a specific window"""
@@ -465,18 +355,31 @@ class NativeBlurOverlay:
         except Exception as e:
             print(f"Linux blur effect hint failed: {e}")
     
-    def kill_completely(self):
-        """Exit the overlay completely (for activate() backward compatibility)"""
-        try:
-            if self.root:
-                self.root.quit()
-                self.root.destroy()
-        except:
-            pass
+    # Backward compatibility methods
+    def activate(self, duration=5):
+        """
+        Show overlay for a fixed duration and then exit (blocking).
         
-        # Only call os._exit if we're in activate() mode (has timer)
-        if self._timer_id is not None:
-            os._exit(0)
+        This is the legacy API for backward compatibility.
+        For new code, use start() + show()/hide() + update() instead.
+        """
+        self.start()
+        self.show()
+        
+        # Schedule hide and cleanup
+        self.root.after(int(duration * 1000), self._deactivate_and_exit)
+        
+        # Run mainloop (blocking)
+        self.root.mainloop()
+    
+    def _deactivate_and_exit(self):
+        """Helper for activate() - hide and exit"""
+        self.hide()
+        self.stop()
+
+
+# Alias for convenience
+Overlay = NativeBlurOverlay
 
 
 if __name__ == "__main__":
@@ -490,20 +393,19 @@ if __name__ == "__main__":
     
     print(f"Testing mode='{mode}' for 3 seconds...")
     print("Available modes: blur, black, white, custom")
-    print("Usage: python NativeBlurOverlay.py [mode]")
+    print("Usage: python overlay.py [mode]")
     print()
     
     if mode == 'blur':
-        overlay = NativeBlurOverlay(mode='blur', blur_strength=4)
+        overlay = Overlay(mode='blur', blur_strength=4)
     elif mode == 'black':
-        overlay = NativeBlurOverlay(mode='black')
+        overlay = Overlay(mode='black')
     elif mode == 'white':
-        overlay = NativeBlurOverlay(mode='white')
+        overlay = Overlay(mode='white')
     elif mode == 'custom':
-        overlay = NativeBlurOverlay(mode='custom', opacity=0.7, color_tint=(255, 0, 0))  # Red example
+        overlay = Overlay(mode='custom', opacity=0.7, color_tint=(255, 0, 0))  # Red example
     else:
         print(f"Unknown mode: {mode}")
         sys.exit(1)
     
     overlay.activate(duration=3)
-

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Show/Hide Control Example
-Demonstrates instant show/hide toggling with no subprocess overhead.
+Demonstrates instant show/hide toggling with single-process architecture.
 Perfect for real-time applications like ScreenStop.
 """
 
@@ -12,17 +12,18 @@ if __name__ == '__main__':
     print("Show/Hide Control Demo")
     print("=" * 50)
     print("This demonstrates instant overlay toggling")
-    print("with minimal latency (~0.1ms per call)")
+    print("with minimal latency (<1ms per call)")
     print("=" * 50)
     print()
 
     # Step 1: Initialize overlay (one-time setup)
     print("1. Initializing overlay...")
     overlay = Overlay(mode='blur', blur_strength=4)
-    overlay.start()  # Creates subprocess, takes ~300ms
+    overlay.start()  # Creates Tkinter windows
     print("   ✓ Ready! (hidden by default)")
     print()
     
+    overlay.update()  # Process initial events
     time.sleep(1)
 
     # Step 2: Rapid show/hide cycles
@@ -31,10 +32,12 @@ if __name__ == '__main__':
         print(f"   Cycle {i+1}:")
         print("     → show() - overlay appears")
         overlay.show()
+        overlay.update()  # Keep overlay responsive
         time.sleep(1.5)
         
         print("     → hide() - overlay disappears")
         overlay.hide()
+        overlay.update()  # Keep overlay responsive
         time.sleep(0.5)
     
     print()
@@ -43,17 +46,22 @@ if __name__ == '__main__':
     print("3. Sustained display test...")
     print("   → Showing for 3 seconds...")
     overlay.show()
-    time.sleep(3)
+    
+    # Keep overlay responsive during sustained display
+    for _ in range(30):  # 30 iterations of 0.1s = 3 seconds
+        overlay.update()
+        time.sleep(0.1)
     
     print("   → Hiding...")
     overlay.hide()
+    overlay.update()
     time.sleep(1)
     
     print()
 
     # Step 4: Cleanup
     print("4. Cleaning up...")
-    overlay.stop()  # Terminates subprocess
+    overlay.stop()
     print("   ✓ Done!")
     print()
 
@@ -61,11 +69,12 @@ if __name__ == '__main__':
     print("=" * 50)
     print("PERFORMANCE SUMMARY")
     print("=" * 50)
-    print("• start():  ~300ms (one-time initialization)")
-    print("• show():   ~0.1ms (instant)")
-    print("• hide():   ~0.1ms (instant)")
-    print("• stop():   graceful cleanup")
+    print("• start():   Creates windows (one-time)")
+    print("• show():    <1ms (instant)")
+    print("• hide():    <1ms (instant)")
+    print("• update():  <1ms (call regularly in your loop!)")
+    print("• stop():    Graceful cleanup")
     print()
-    print("Perfect for ScreenStop - no latency on show/hide!")
+    print("Perfect for ScreenStop - no process spawning!")
     print("=" * 50)
 

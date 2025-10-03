@@ -1,38 +1,39 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Example: Manual start/stop control with multiprocessing
+Example: Manual start/stop control
 
 Shows how to manually control overlay lifetime using start() and stop().
 Perfect for integration with apps like ScreenStop.
+
+Note: With the new single-process architecture, Tkinter must run on the main thread.
+This example shows a typical pattern where you integrate the overlay with your main loop.
 """
 from screenoverlay import Overlay
-from multiprocessing import Process
 import time
-
-def run_overlay():
-    """Run overlay in subprocess"""
-    overlay = Overlay(mode='blur', blur_strength=4)
-    overlay.start()  # Runs indefinitely
 
 if __name__ == '__main__':
     print("Starting overlay...")
     
-    # Start overlay in separate process
-    overlay_process = Process(target=run_overlay)
-    overlay_process.start()
+    # Initialize overlay
+    overlay = Overlay(mode='blur', blur_strength=4)
+    overlay.start()
+    overlay.show()  # Show immediately
     
-    print("Overlay is running. Press Ctrl+C to stop, or waiting 5 seconds...")
+    print("Overlay is running. Showing for 5 seconds...")
     
     try:
-        time.sleep(5)
+        # Keep overlay responsive for 5 seconds
+        start_time = time.time()
+        while time.time() - start_time < 5:
+            overlay.update()  # Must call regularly to keep responsive
+            time.sleep(0.01)  # Update every 10ms
     except KeyboardInterrupt:
         print("\nInterrupted by user!")
     
     # Stop the overlay
     print("Stopping overlay...")
-    overlay_process.terminate()
-    overlay_process.join()
+    overlay.stop()
     
     print("Overlay stopped!")
 
