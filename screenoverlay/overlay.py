@@ -63,6 +63,7 @@ class NativeBlurOverlay:
         self.root = None
         self.windows = []  # List to hold multiple windows for multi-monitor
         self._is_visible = False
+        self._last_update_time = 0  # Throttle update() calls
         
     def start(self):
         """
@@ -78,7 +79,7 @@ class NativeBlurOverlay:
             
             while True:
                 overlay.show()      # Show overlay (instant)
-                time.sleep(2)
+            time.sleep(2)
                 overlay.hide()      # Hide overlay (instant)
                 overlay.update()    # Keep overlay responsive (call regularly!)
             
@@ -103,26 +104,34 @@ class NativeBlurOverlay:
             self.start()
         
         if not self._is_visible:
+            print(f"\n🔴 SHOWING overlay windows...")
             for win in self.windows:
                 try:
                     win.deiconify()
+                    win.attributes('-topmost', True)  # Re-enable topmost when showing
                     win.lift()
                 except Exception as e:
                     print(f"Warning: Failed to show window: {e}")
             self._is_visible = True
+            print(f"✅ OVERLAY IS NOW VISIBLE\n")
     
     def hide(self):
-        """Hide the overlay (instant, <1ms)"""
+        """Hide the overlay using withdraw() (lightweight, fast, no resource leaks)"""
         if self.root is None:
             return  # Not started yet
         
         if self._is_visible:
+            # LIGHTWEIGHT HIDE - just withdraw windows (don't destroy/recreate)
+            print(f"🫥 WITHDRAWING overlay windows (lightweight hide)...")
             for win in self.windows:
                 try:
+                    win.attributes('-topmost', False)  # Remove topmost before hiding
                     win.withdraw()
                 except Exception as e:
-                    print(f"Warning: Failed to hide window: {e}")
+                    print(f"Warning: Failed to withdraw window: {e}")
+            
             self._is_visible = False
+            print(f"✅ OVERLAY HIDDEN (windows withdrawn)\n")
     
     def update(self):
         """
@@ -143,6 +152,31 @@ class NativeBlurOverlay:
         """
         if self.root is not None:
             try:
+                import time
+                current_time = time.time()
+                
+                # Throttle: only update every 100ms (10 FPS) to reduce CPU load
+                # This prevents excessive event processing while keeping UI responsive
+                if current_time - self._last_update_time < 0.1:
+                    return  # Skip this update
+                
+                self._last_update_time = current_time
+                
+                # Defensive check: verify window state matches _is_visible flag
+                for win in self.windows:
+                    try:
+                        actual_state = win.winfo_viewable()
+                        if actual_state and not self._is_visible:
+                            print(f"⚠️ BUG DETECTED: Window is visible but _is_visible=False! Force hiding...")
+                            win.attributes('-topmost', False)
+                            win.withdraw()
+                        elif not actual_state and self._is_visible:
+                            print(f"⚠️ BUG DETECTED: Window is hidden but _is_visible=True! Syncing flag...")
+                            self._is_visible = False
+                    except Exception as e:
+                        pass  # Ignore errors in defensive check
+                
+                # Process Tkinter events
                 self.root.update()
             except Exception as e:
                 print(f"Warning: Update failed: {e}")
