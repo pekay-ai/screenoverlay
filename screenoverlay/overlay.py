@@ -220,6 +220,16 @@ class NativeBlurOverlay:
         
         # Create primary root window
         self.root = tk.Tk()
+        
+        # Hide from dock immediately after creating Tk window
+        # This prevents dock icon from appearing even though we create GUI windows
+        try:
+            import AppKit
+            AppKit.NSApp.setActivationPolicy_(AppKit.NSApplicationActivationPolicyProhibited)
+            print("✅ Screenoverlay: Dock icon hidden")
+        except Exception as e:
+            print(f"⚠️  Screenoverlay: Could not hide dock icon: {e}")
+        
         self.root.overrideredirect(True)
         self.root.attributes('-topmost', True)
         
