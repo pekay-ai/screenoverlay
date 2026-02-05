@@ -20,11 +20,7 @@ except ImportError:
 
 
 class NativeBlurOverlay:
-    def __init__(self, mode='blur', blur_strength=3, opacity=0.85, color_tint=(136, 136, 136), all_screens=True,
-                 watermark_enabled=False, watermark_text="", watermark_position="bottom_right",
-                 watermark_font_family="Segoe UI", watermark_font_size=16, watermark_padding=24,
-                 watermark_color="#FFFFFF", watermark_shadow=True, watermark_shadow_color="#000000",
-                 watermark_shadow_offset=(1, 1)):
+    def __init__(self, mode='blur', blur_strength=3, opacity=0.85, color_tint=(136, 136, 136), all_screens=True):
         """
         Initialize native overlay
         
@@ -38,33 +34,10 @@ class NativeBlurOverlay:
         - opacity (float): Window opacity (0.0 to 1.0)
         - color_tint (tuple): RGB color tint (0-255)
         - all_screens (bool): If True, blur all monitors. If False, only blur primary monitor (default: True)
-        - watermark_enabled (bool): Enable watermark text overlay (default: False)
-        - watermark_text (str): Text to display in watermark (default: "")
-        - watermark_position (str): Position of watermark - 'bottom_right', 'bottom_left', 'top_right', 'top_left' (default: 'bottom_right')
-        - watermark_font_family (str): Font family for watermark (default: 'Segoe UI')
-        - watermark_font_size (int): Font size for watermark (default: 16)
-        - watermark_padding (int): Padding from edge in pixels (default: 24)
-        - watermark_color (str): Text color in hex format (default: '#FFFFFF')
-        - watermark_shadow (bool): Enable text shadow (default: True)
-        - watermark_shadow_color (str): Shadow color in hex format (default: '#000000')
-        - watermark_shadow_offset (tuple): Shadow offset (x, y) in pixels (default: (1, 1))
         """
         self.mode = mode.lower()
         self.blur_strength = max(1, min(5, blur_strength))
         self.all_screens = all_screens
-        
-        # Watermark settings
-        self.watermark_enabled = watermark_enabled
-        self.watermark_text = watermark_text
-        self.watermark_position = watermark_position
-        self.watermark_font_family = watermark_font_family
-        self.watermark_font_size = watermark_font_size
-        self.watermark_padding = watermark_padding
-        self.watermark_color = watermark_color
-        self.watermark_shadow = watermark_shadow
-        self.watermark_shadow_color = watermark_shadow_color
-        self.watermark_shadow_offset = watermark_shadow_offset
-        self._watermark_widgets = []  # Store references to prevent garbage collection
         
         # Apply mode-specific settings
         if self.mode == 'black':
@@ -90,7 +63,6 @@ class NativeBlurOverlay:
         self.root = None
         self.windows = []  # List to hold multiple windows for multi-monitor
         self._is_visible = False
-        self._last_update_time = 0  # Throttle update() calls
         
     def start(self):
         """
@@ -106,7 +78,7 @@ class NativeBlurOverlay:
             
             while True:
                 overlay.show()      # Show overlay (instant)
-            time.sleep(2)
+                time.sleep(2)
                 overlay.hide()      # Hide overlay (instant)
                 overlay.update()    # Keep overlay responsive (call regularly!)
             
@@ -131,34 +103,26 @@ class NativeBlurOverlay:
             self.start()
         
         if not self._is_visible:
-            print(f"\n🔴 SHOWING overlay windows...")
             for win in self.windows:
                 try:
                     win.deiconify()
-                    win.attributes('-topmost', True)  # Re-enable topmost when showing
                     win.lift()
                 except Exception as e:
                     print(f"Warning: Failed to show window: {e}")
             self._is_visible = True
-            print(f"✅ OVERLAY IS NOW VISIBLE\n")
     
     def hide(self):
-        """Hide the overlay using withdraw() (lightweight, fast, no resource leaks)"""
+        """Hide the overlay (instant, <1ms)"""
         if self.root is None:
             return  # Not started yet
         
         if self._is_visible:
-            # LIGHTWEIGHT HIDE - just withdraw windows (don't destroy/recreate)
-            print(f"🫥 WITHDRAWING overlay windows (lightweight hide)...")
             for win in self.windows:
                 try:
-                    win.attributes('-topmost', False)  # Remove topmost before hiding
                     win.withdraw()
                 except Exception as e:
-                    print(f"Warning: Failed to withdraw window: {e}")
-            
+                    print(f"Warning: Failed to hide window: {e}")
             self._is_visible = False
-            print(f"✅ OVERLAY HIDDEN (windows withdrawn)\n")
     
     def update(self):
         """
@@ -179,31 +143,6 @@ class NativeBlurOverlay:
         """
         if self.root is not None:
             try:
-                import time
-                current_time = time.time()
-                
-                # Throttle: only update every 100ms (10 FPS) to reduce CPU load
-                # This prevents excessive event processing while keeping UI responsive
-                if current_time - self._last_update_time < 0.1:
-                    return  # Skip this update
-                
-                self._last_update_time = current_time
-                
-                # Defensive check: verify window state matches _is_visible flag
-                for win in self.windows:
-                    try:
-                        actual_state = win.winfo_viewable()
-                        if actual_state and not self._is_visible:
-                            print(f"⚠️ BUG DETECTED: Window is visible but _is_visible=False! Force hiding...")
-                            win.attributes('-topmost', False)
-                            win.withdraw()
-                        elif not actual_state and self._is_visible:
-                            print(f"⚠️ BUG DETECTED: Window is hidden but _is_visible=True! Syncing flag...")
-                            self._is_visible = False
-                    except Exception as e:
-                        pass  # Ignore errors in defensive check
-                
-                # Process Tkinter events
                 self.root.update()
             except Exception as e:
                 print(f"Warning: Update failed: {e}")
@@ -247,16 +186,6 @@ class NativeBlurOverlay:
         
         # Create primary root window
         self.root = tk.Tk()
-        
-        # Hide from dock immediately after creating Tk window
-        # This prevents dock icon from appearing even though we create GUI windows
-        try:
-            import AppKit
-            AppKit.NSApp.setActivationPolicy_(AppKit.NSApplicationActivationPolicyProhibited)
-            print("✅ Screenoverlay: Dock icon hidden")
-        except Exception as e:
-            print(f"⚠️  Screenoverlay: Could not hide dock icon: {e}")
-        
         self.root.overrideredirect(True)
         self.root.attributes('-topmost', True)
         
@@ -290,81 +219,9 @@ class NativeBlurOverlay:
         if self.apply_blur:
             self._apply_native_blur_to_window(window)
         
-        # Add watermark if enabled
-        self._add_watermark(window)
-        
         # Bind escape key to hide (only on primary window)
         if window == self.root:
             window.bind('<Escape>', lambda e: self.hide())
-    
-    def _add_watermark(self, window):
-        """Add watermark text overlay to a window"""
-        if not self.watermark_enabled or not self.watermark_text:
-            return
-        
-        # Font configuration
-        font = (self.watermark_font_family, self.watermark_font_size, "bold")
-        
-        # Determine placement based on position
-        pos = self.watermark_position.lower()
-        xpad = self.watermark_padding
-        ypad = self.watermark_padding
-        
-        if pos == "bottom_right":
-            relx, rely, anchor = 1.0, 1.0, "se"
-            x_offset = -xpad
-            y_offset = -ypad
-        elif pos == "bottom_left":
-            relx, rely, anchor = 0.0, 1.0, "sw"
-            x_offset = xpad
-            y_offset = -ypad
-        elif pos == "top_right":
-            relx, rely, anchor = 1.0, 0.0, "ne"
-            x_offset = -xpad
-            y_offset = ypad
-        else:  # "top_left"
-            relx, rely, anchor = 0.0, 0.0, "nw"
-            x_offset = xpad
-            y_offset = ypad
-        
-        # Get window background color for transparent label background
-        bg_color = window.cget("bg")
-        
-        # Add shadow if enabled
-        if self.watermark_shadow:
-            sx, sy = self.watermark_shadow_offset
-            shadow = tk.Label(
-                window,
-                text=self.watermark_text,
-                fg=self.watermark_shadow_color,
-                bg=bg_color,
-                font=font
-            )
-            shadow.place(
-                relx=relx,
-                rely=rely,
-                x=x_offset + sx,
-                y=y_offset + sy,
-                anchor=anchor
-            )
-            self._watermark_widgets.append(shadow)
-        
-        # Add main text
-        main = tk.Label(
-            window,
-            text=self.watermark_text,
-            fg=self.watermark_color,
-            bg=bg_color,
-            font=font
-        )
-        main.place(
-            relx=relx,
-            rely=rely,
-            x=x_offset,
-            y=y_offset,
-            anchor=anchor
-        )
-        self._watermark_widgets.append(main)
     
     def _apply_native_blur_to_window(self, window):
         """Apply OS-native backdrop blur effect to a specific window"""
