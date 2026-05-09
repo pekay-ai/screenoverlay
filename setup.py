@@ -5,9 +5,9 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="screenoverlay",
-    version="0.6.5",
+    version="0.6.6",
     author="ScreenStop",
-    author_email="nicky@screenstop.co",
+    author_email="nicky.pappo@screenstop.co",
     description="Cross-platform screen overlay with blur, black, white, and custom modes",
     long_description=long_description,
     long_description_content_type="text/markdown",
