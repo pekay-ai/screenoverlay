@@ -13,7 +13,7 @@ Perfect for **privacy screens**, **focus modes**, **screen recording**, **presen
 
 ## 📖 Our Story
 
-While developing **[ScreenStop](https://github.com/pekay/screenstop)** - our advanced AI-powered phone screenshot detection system - we found ourselves constantly needing to blur or obscure our screens during development, testing, and demos. We needed something **instant**, **lightweight**, and **cross-platform** that didn't require screen recording permissions.
+While developing **[ScreenStop](https://screenstop.co)** - our advanced AI-powered phone screenshot detection system - we found ourselves constantly needing to blur or obscure our screens during development, testing, and demos. We needed something **instant**, **lightweight**, and **cross-platform** that didn't require screen recording permissions.
 
 After trying various solutions and finding them too slow (>1 second latency), too complex, or requiring special permissions, we built our own. **ScreenOverlay** was born from this need - a <50ms overlay system that just works.
 
@@ -366,7 +366,7 @@ This makes `show()` and `hide()` nearly **10,000x faster** than recreating the o
 
 **ScreenOverlay** is great for quick privacy needs, but what if you need **automatic, AI-powered protection**?
 
-### Meet **[ScreenStop](https://github.com/pekay/screenstop)** 📱🔍
+### Meet **[ScreenStop](https://screenstop.co)** 📱🔍
 
 Our flagship product, **ScreenStop**, is an enterprise-grade ML-powered system that **automatically detects** when someone is taking a screenshot with their phone and triggers instant screen protection.
 
@@ -387,7 +387,7 @@ Our flagship product, **ScreenStop**, is an enterprise-grade ML-powered system t
 **ScreenOverlay** provides the instant privacy overlay.  
 **ScreenStop** provides the intelligence to trigger it automatically.
 
-**[→ Learn more about ScreenStop](https://github.com/pekay/screenstop)**
+**[→ Learn more about ScreenStop](https://screenstop.co)**
 
 ---
 
@@ -397,7 +397,7 @@ Our flagship product, **ScreenStop**, is an enterprise-grade ML-powered system t
 
 ```bash
 # Clone the repository
-git clone https://github.com/pekay/screenoverlay.git
+git clone https://github.com/pekay-ai/screenoverlay.git
 cd screenoverlay
 
 # Create virtual environment
@@ -508,7 +508,7 @@ A commercial license is required if you use ScreenOverlay:
 
 ## 🙏 Acknowledgments
 
-- Built during the development of **[ScreenStop](https://github.com/pekay/screenstop)**
+- Built during the development of **[ScreenStop](https://screenstop.co)**
 - Uses Python's `tkinter` for cross-platform GUI
 - Leverages native OS APIs for optimal performance
 - Inspired by the need for instant, permission-free privacy controls
@@ -517,10 +517,10 @@ A commercial license is required if you use ScreenOverlay:
 
 ## 📬 Contact & Support
 
-- 🐛 **Issues:** [GitHub Issues](https://github.com/pekay/screenoverlay/issues)
-- 💬 **Discussions:** [GitHub Discussions](https://github.com/pekay/screenoverlay/discussions)
+- 🐛 **Issues:** [GitHub Issues](https://github.com/pekay-ai/screenoverlay/issues)
+- 💬 **Discussions:** [GitHub Discussions](https://github.com/pekay-ai/screenoverlay/discussions)
 - 📧 **Email:** ppnicky@gmail.com
-- 🏢 **Enterprise Solutions:** Contact us about **[ScreenStop](https://github.com/pekay/screenstop)** for advanced protection
+- 🏢 **Enterprise Solutions:** Contact us about **[ScreenStop](https://screenstop.co)** for advanced protection
 
 ---
 
@@ -530,14 +530,14 @@ If you find **ScreenOverlay** useful:
 - ⭐ Star the repository
 - 🐦 Share on social media
 - 📝 Write about your use case
-- 🔍 Explore **[ScreenStop](https://github.com/pekay/screenstop)** for advanced features
+- 🔍 Explore **[ScreenStop](https://screenstop.co)** for advanced features
 
 ---
 
 <div align="center">
 
-**Built with ❤️ by Pekay**
+**Built with ❤️ by [ScreenStop](https://screenstop.co)**
 
-[Download](https://pypi.org/project/screenoverlay/) · [Report Bug](https://github.com/pekay/screenoverlay/issues) · [Request Feature](https://github.com/pekay/screenoverlay/issues) · [ScreenStop](https://github.com/pekay/screenstop)
+[Download](https://pypi.org/project/screenoverlay/) · [Report Bug](https://github.com/pekay-ai/screenoverlay/issues) · [Request Feature](https://github.com/pekay-ai/screenoverlay/issues) · [ScreenStop](https://screenstop.co)
 
 </div>
