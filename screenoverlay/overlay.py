@@ -24,34 +24,50 @@ class NativeBlurOverlay:
                  watermark_enabled=False, watermark_text="", watermark_position="bottom_right",
                  watermark_font_family="Segoe UI", watermark_font_size=16, watermark_padding=24,
                  watermark_color="#FFFFFF", watermark_shadow=True, watermark_shadow_color="#000000",
-                 watermark_shadow_offset=(1, 1)):
+                 watermark_shadow_offset=(1, 1),
+                 learn_more_url="", learn_more_text="Learn more",
+                 badge_link_color="#7FB3FF", badge_inner_padding=10):
         """
         Initialize native overlay
-        
+
         Parameters:
-        - mode (str): Overlay mode - 'blur', 'black', 'white', 'custom'
+        - mode (str): Overlay mode - 'blur', 'black', 'white', 'custom', 'badge'
                       'blur'   - Blurred background with tint (default)
                       'black'  - Full black screen (privacy mode)
                       'white'  - Full white screen (flash/fade effect)
                       'custom' - Custom color with transparency
+                      'badge'  - Small, non-covering, always-on-top corner watermark.
+                                 Covers nothing and dims nothing — a persistent
+                                 deterrent that floats text in a screen corner.
         - blur_strength (int): How blurred/obscured (1-5, only for mode='blur')
         - opacity (float): Window opacity (0.0 to 1.0)
         - color_tint (tuple): RGB color tint (0-255)
         - all_screens (bool): If True, blur all monitors. If False, only blur primary monitor (default: True)
         - watermark_enabled (bool): Enable watermark text overlay (default: False)
-        - watermark_text (str): Text to display in watermark (default: "")
+        - watermark_text (str): Text to display in watermark / badge (default: "")
         - watermark_position (str): Position of watermark - 'bottom_right', 'bottom_left', 'top_right', 'top_left' (default: 'bottom_right')
         - watermark_font_family (str): Font family for watermark (default: 'Segoe UI')
         - watermark_font_size (int): Font size for watermark (default: 16)
-        - watermark_padding (int): Padding from edge in pixels (default: 24)
+        - watermark_padding (int): Padding from screen edge in pixels (default: 24)
         - watermark_color (str): Text color in hex format (default: '#FFFFFF')
         - watermark_shadow (bool): Enable text shadow (default: True)
         - watermark_shadow_color (str): Shadow color in hex format (default: '#000000')
         - watermark_shadow_offset (tuple): Shadow offset (x, y) in pixels (default: (1, 1))
+        - learn_more_url (str): If set (mode='badge'), clicking the badge opens this URL (default: "")
+        - learn_more_text (str): Clickable link text shown after the badge text (default: "Learn more")
+        - badge_link_color (str): Link text color in hex format (default: '#7FB3FF')
+        - badge_inner_padding (int): Padding around text inside the badge in pixels (default: 10)
         """
         self.mode = mode.lower()
         self.blur_strength = max(1, min(5, blur_strength))
         self.all_screens = all_screens
+
+        # Badge settings (mode='badge')
+        self.learn_more_url = learn_more_url
+        self.learn_more_text = learn_more_text
+        self.badge_link_color = badge_link_color
+        self.badge_inner_padding = badge_inner_padding
+        self._badge_main_label = None  # ref for live set_text()
         
         # Watermark settings
         self.watermark_enabled = watermark_enabled
@@ -77,6 +93,11 @@ class NativeBlurOverlay:
             self.apply_blur = False
         elif self.mode == 'custom':
             self.opacity = opacity
+            self.color_tint = color_tint
+            self.apply_blur = False
+        elif self.mode == 'badge':
+            # Non-covering corner badge: no tint, no blur, no screen dimming.
+            self.opacity = opacity if opacity != 0.85 else 0.9
             self.color_tint = color_tint
             self.apply_blur = False
         else:  # mode == 'blur'
@@ -117,11 +138,16 @@ class NativeBlurOverlay:
         
         # Create windows for all monitors
         self._create_windows()
-        
+
+        # A badge is a persistent deterrent — it stays visible after start().
+        if self.mode == 'badge':
+            self._is_visible = True
+            return
+
         # Hide all windows initially
         for win in self.windows:
             win.withdraw()
-        
+
         self._is_visible = False
     
     def show(self):
@@ -239,6 +265,11 @@ class NativeBlurOverlay:
     
     def _create_windows(self):
         """Create overlay windows for all monitors (or just primary if all_screens=False)"""
+        # Badge mode uses a single small corner window, not full-screen coverage.
+        if self.mode == 'badge':
+            self._create_badge_window()
+            return
+
         monitors = self._get_monitors()
         
         # If all_screens is False, only use primary monitor
@@ -365,7 +396,136 @@ class NativeBlurOverlay:
             anchor=anchor
         )
         self._watermark_widgets.append(main)
-    
+
+    # ------------------------------------------------------------------
+    # Badge mode (mode='badge') — small, non-covering corner watermark
+    # ------------------------------------------------------------------
+    def _create_badge_window(self):
+        """
+        Create a small, always-on-top badge window that covers nothing.
+
+        Unlike the full-screen overlay modes, this dims/blurs nothing — it just
+        floats the watermark text (plus an optional clickable 'Learn more' link)
+        in a screen corner as a persistent deterrent.
+        """
+        monitors = self._get_monitors()
+        mx, my, mw, mh = monitors[0]  # primary monitor
+
+        self.root = tk.Tk()
+        self.root.overrideredirect(True)
+        self.root.attributes('-topmost', True)
+
+        # Hide from macOS dock (same approach as the full-screen overlay path)
+        try:
+            import AppKit
+            AppKit.NSApp.setActivationPolicy_(AppKit.NSApplicationActivationPolicyProhibited)
+        except Exception:
+            pass
+
+        bg_color = self._configure_badge_transparency()
+        self._build_badge_content(self.root, bg_color)
+        self.windows.append(self.root)
+
+        # Size the window to its content, then place it in the chosen corner.
+        self.root.update_idletasks()
+        self._place_badge(self.root, mx, my, mw, mh)
+
+    def _configure_badge_transparency(self):
+        """
+        Make the badge background disappear so only the text floats.
+
+        Returns the background color the labels should use.
+        On Windows, '-transparentcolor' makes matching pixels fully transparent
+        AND click-through, leaving crisp text. Elsewhere we fall back to a
+        semi-transparent badge via window '-alpha'.
+        """
+        # A near-black key unlikely to collide with the text/shadow colors.
+        transparent_key = '#010203'
+        if platform.system() == 'Windows':
+            try:
+                self.root.configure(bg=transparent_key)
+                self.root.attributes('-transparentcolor', transparent_key)
+                return transparent_key
+            except tk.TclError:
+                pass  # Fall through to alpha-based badge
+
+        bg_color = f'#{self.color_tint[0]:02x}{self.color_tint[1]:02x}{self.color_tint[2]:02x}'
+        self.root.configure(bg=bg_color)
+        try:
+            self.root.attributes('-alpha', self.opacity)
+        except tk.TclError:
+            pass
+        return bg_color
+
+    def _build_badge_content(self, window, bg_color):
+        """Build the badge text + optional clickable 'Learn more' link."""
+        font = (self.watermark_font_family, self.watermark_font_size, "bold")
+        pad = self.badge_inner_padding
+
+        container = tk.Frame(window, bg=bg_color)
+        container.pack(padx=pad, pady=pad)
+
+        self._badge_main_label = tk.Label(
+            container, text=self.watermark_text,
+            fg=self.watermark_color, bg=bg_color, font=font
+        )
+        self._badge_main_label.pack(side='left')
+        self._watermark_widgets.append(self._badge_main_label)
+
+        if self.learn_more_url:
+            link_font = (self.watermark_font_family, self.watermark_font_size, "underline")
+            link = tk.Label(
+                container, text="  " + self.learn_more_text,
+                fg=self.badge_link_color, bg=bg_color, font=link_font, cursor="hand2"
+            )
+            link.pack(side='left')
+            self._watermark_widgets.append(link)
+
+        # The whole badge is clickable (not just the link) for a generous target.
+        for widget in (window, container, self._badge_main_label, *self._watermark_widgets):
+            widget.bind("<Button-1>", self._open_learn_more)
+
+    def _place_badge(self, window, mx, my, mw, mh):
+        """Position the (already sized) badge window in the chosen screen corner."""
+        w = window.winfo_reqwidth()
+        h = window.winfo_reqheight()
+        pad = self.watermark_padding
+        pos = self.watermark_position.lower()
+
+        if pos == 'bottom_right':
+            x, y = mx + mw - w - pad, my + mh - h - pad
+        elif pos == 'bottom_left':
+            x, y = mx + pad, my + mh - h - pad
+        elif pos == 'top_right':
+            x, y = mx + mw - w - pad, my + pad
+        else:  # 'top_left'
+            x, y = mx + pad, my + pad
+
+        window.geometry(f"+{int(x)}+{int(y)}")
+
+    def _open_learn_more(self, event=None):
+        """Open the configured learn-more URL when the badge is clicked."""
+        if not self.learn_more_url:
+            return
+        try:
+            import webbrowser
+            webbrowser.open(self.learn_more_url)
+        except Exception as e:
+            print(f"Could not open learn-more URL: {e}")
+
+    def set_text(self, text):
+        """Update the badge text live (no window recreate) and reposition."""
+        self.watermark_text = text
+        if self._badge_main_label is None or self.root is None:
+            return
+        try:
+            self._badge_main_label.config(text=text)
+            self.root.update_idletasks()
+            mx, my, mw, mh = self._get_monitors()[0]
+            self._place_badge(self.root, mx, my, mw, mh)
+        except Exception as e:
+            print(f"Could not update badge text: {e}")
+
     def _apply_native_blur_to_window(self, window):
         """Apply OS-native backdrop blur effect to a specific window"""
         system = platform.system()
