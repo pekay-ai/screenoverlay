@@ -89,6 +89,7 @@ class NativeBlurOverlay:
         
         self.root = None
         self.windows = []  # List to hold multiple windows for multi-monitor
+        self._monitors = []  # The monitor list the current windows were built for
         self._is_visible = False
         self._last_update_time = 0  # Throttle update() calls
         
@@ -129,7 +130,13 @@ class NativeBlurOverlay:
         if self.root is None:
             # Auto-start if not started yet
             self.start()
-        
+
+        # Re-enumerate monitors on EVERY show: the window list was built at start() and
+        # display topology changes after that (dock a monitor, Win+P duplicate/extend/
+        # second-only). A stale list leaves a live screen uncovered — coverage must match
+        # what exists at the moment blur goes up, not at app startup. (v0.6.10)
+        self._refresh_windows_if_changed()
+
         if not self._is_visible:
             print(f"\n🔴 SHOWING overlay windows...")
             for win in self.windows:
@@ -239,12 +246,9 @@ class NativeBlurOverlay:
     
     def _create_windows(self):
         """Create overlay windows for all monitors (or just primary if all_screens=False)"""
-        monitors = self._get_monitors()
-        
-        # If all_screens is False, only use primary monitor
-        if not self.all_screens:
-            monitors = monitors[:1]  # Only keep first monitor
-        
+        monitors = self._active_monitors()
+        self._monitors = monitors
+
         # Create primary root window
         self.root = tk.Tk()
         
@@ -274,6 +278,60 @@ class NativeBlurOverlay:
             self._configure_window(win, x, y, width, height)
             self.windows.append(win)
     
+    def _active_monitors(self):
+        """The monitors the overlay must cover RIGHT NOW, after policy clamps.
+
+        Primary-only when the caller asked (all_screens=False) OR on macOS 26+, where
+        multi-monitor native blur is broken: the dock-hide activation policy empties
+        NSApp.windows() and the Cocoa/Tk Y-origin differs, leaving second screens
+        partially covered. Primary-only there until multi-monitor is fixed."""
+        monitors = self._get_monitors()
+        _force_single = False
+        if platform.system() == "Darwin":
+            try:
+                _force_single = int(platform.mac_ver()[0].split(".")[0]) >= 26
+            except (ValueError, IndexError):
+                _force_single = False
+        if not self.all_screens or _force_single:
+            monitors = monitors[:1]  # Only keep first monitor
+        return monitors
+
+    def _refresh_windows_if_changed(self):
+        """Rebuild the window set if the display topology changed since the windows
+        were built (monitor docked/undocked, Win+P duplicate/extend/second-only).
+        Cheap no-op when nothing changed; called from show() so coverage always
+        matches the screens that exist at the moment blur goes up. (v0.6.10)"""
+        try:
+            current = self._active_monitors()
+        except Exception:
+            return
+        if current == self._monitors or not current or self.root is None:
+            return
+        print(f"🖥️  Display topology changed: {len(self._monitors)} -> {len(current)} monitor(s); rebuilding overlay windows")
+        # Root window is reused: move/resize it to the new primary. (Destroying the Tk
+        # root would tear down Tcl itself; geometry alone keeps blur+watermark intact.)
+        x, y, width, height = current[0]
+        try:
+            self.root.geometry(f"{width}x{height}+{x}+{y}")
+        except Exception as e:
+            print(f"Warning: could not re-position primary overlay window: {e}")
+        # Secondary windows are cheap Toplevels: drop and recreate for the new list.
+        for win in self.windows[1:]:
+            try:
+                win.destroy()
+            except Exception:
+                pass
+        self.windows = [self.root]
+        for x, y, width, height in current[1:]:
+            win = tk.Toplevel(self.root)
+            win.overrideredirect(True)
+            win.attributes('-topmost', True)
+            self._configure_window(win, x, y, width, height)
+            if not self._is_visible:
+                win.withdraw()   # keep new windows hidden until show() reveals the set
+            self.windows.append(win)
+        self._monitors = current
+
     def _configure_window(self, window, x, y, width, height):
         """Configure a window with overlay settings"""
         # Set background color (tint)
